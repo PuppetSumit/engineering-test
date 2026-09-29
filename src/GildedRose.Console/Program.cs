@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace GildedRose.Console;
 
@@ -6,28 +7,32 @@ public class Program
 {
     public IList<Item> Items = new List<Item>();
 
+    private const string AgedBrie = "Aged Brie";
+    private const string Sulfuras = "Sulfuras, Hand of Ragnaros";
+    private const string BackstagePasses = "Backstage passes to a TAFKAL80ETC concert";
+    private const string ConjuredPrefix = "Conjured ";
+
     static void Main(string[] args)
     {
         System.Console.WriteLine("OMGHAI!");
 
-        var app = new Program()
-                      {
-                          Items = new List<Item>
-                                      {
-                                          new Item {Name = "+5 Dexterity Vest", SellIn = 10, Quality = 20},
-                                          new Item {Name = "Aged Brie", SellIn = 2, Quality = 0},
-                                          new Item {Name = "Elixir of the Mongoose", SellIn = 5, Quality = 7},
-                                          new Item {Name = "Sulfuras, Hand of Ragnaros", SellIn = 0, Quality = 80},
-                                          new Item
-                                              {
-                                                  Name = "Backstage passes to a TAFKAL80ETC concert",
-                                                  SellIn = 15,
-                                                  Quality = 20
-                                              },
-                                          new Item {Name = "Conjured Mana Cake", SellIn = 3, Quality = 6}
-                                      }
-
-                      };
+        var app = new Program
+        {
+            Items = new List<Item>
+            {
+                new Item { Name = "+5 Dexterity Vest", SellIn = 10, Quality = 20 },
+                new Item { Name = AgedBrie, SellIn = 2, Quality = 0 },
+                new Item { Name = "Elixir of the Mongoose", SellIn = 5, Quality = 7 },
+                new Item { Name = Sulfuras, SellIn = 0, Quality = 80 },
+                new Item
+                {
+                    Name = BackstagePasses,
+                    SellIn = 15,
+                    Quality = 20
+                },
+                new Item { Name = "Conjured Mana Cake", SellIn = 3, Quality = 6 }
+            }
+        };
 
         app.UpdateQuality();
 
@@ -36,78 +41,113 @@ public class Program
 
     public void UpdateQuality()
     {
-        for (var i = 0; i < Items.Count; i++)
+        foreach (var item in Items)
         {
-            if (Items[i].Name != "Aged Brie" && Items[i].Name != "Backstage passes to a TAFKAL80ETC concert")
+            // Sulfuras is legendary and never changes.
+            if (IsSulfuras(item))
             {
-                if (Items[i].Quality > 0)
-                {
-                    if (Items[i].Name != "Sulfuras, Hand of Ragnaros")
-                    {
-                        Items[i].Quality = Items[i].Quality - 1;
-                    }
-                }
-            }
-            else
-            {
-                if (Items[i].Quality < 50)
-                {
-                    Items[i].Quality = Items[i].Quality + 1;
-
-                    if (Items[i].Name == "Backstage passes to a TAFKAL80ETC concert")
-                    {
-                        if (Items[i].SellIn < 11)
-                        {
-                            if (Items[i].Quality < 50)
-                            {
-                                Items[i].Quality = Items[i].Quality + 1;
-                            }
-                        }
-
-                        if (Items[i].SellIn < 6)
-                        {
-                            if (Items[i].Quality < 50)
-                            {
-                                Items[i].Quality = Items[i].Quality + 1;
-                            }
-                        }
-                    }
-                }
+                continue;
             }
 
-            if (Items[i].Name != "Sulfuras, Hand of Ragnaros")
-            {
-                Items[i].SellIn = Items[i].SellIn - 1;
-            }
+            UpdateQuality(item);
 
-            if (Items[i].SellIn < 0)
+            item.SellIn--;
+
+            // Quality changes again after the sell-by date.
+            if (item.SellIn < 0)
             {
-                if (Items[i].Name != "Aged Brie")
-                {
-                    if (Items[i].Name != "Backstage passes to a TAFKAL80ETC concert")
-                    {
-                        if (Items[i].Quality > 0)
-                        {
-                            if (Items[i].Name != "Sulfuras, Hand of Ragnaros")
-                            {
-                                Items[i].Quality = Items[i].Quality - 1;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        Items[i].Quality = Items[i].Quality - Items[i].Quality;
-                    }
-                }
-                else
-                {
-                    if (Items[i].Quality < 50)
-                    {
-                        Items[i].Quality = Items[i].Quality + 1;
-                    }
-                }
+                UpdateQualityAfterSellByDate(item);
             }
         }
+    }
+
+    private static void UpdateQuality(Item item)
+    {
+        if (IsBackstagePass(item))
+        {
+            UpdateBackstagePassQuality(item);
+            return;
+        }
+
+        if (IsAgedBrie(item))
+        {
+            IncreaseQuality(item);
+            return;
+        }
+
+        DecreaseQuality(item, GetDegradationRate(item));
+    }
+
+    private static void UpdateQualityAfterSellByDate(Item item)
+    {
+        if (IsBackstagePass(item))
+        {
+            // Backstage passes have no value after the concert.
+            item.Quality = 0;
+            return;
+        }
+
+        if (IsAgedBrie(item))
+        {
+            // Aged Brie continues to improve after its sell-by date.
+            IncreaseQuality(item);
+            return;
+        }
+
+        // Normal and Conjured items degrade twice as fast after expiry.
+        DecreaseQuality(item, GetDegradationRate(item));
+    }
+
+    private static void UpdateBackstagePassQuality(Item item)
+    {
+        IncreaseQuality(item);
+
+        if (item.SellIn < 11)
+        {
+            IncreaseQuality(item);
+        }
+
+        if (item.SellIn < 6)
+        {
+            IncreaseQuality(item);
+        }
+    }
+
+    private static int GetDegradationRate(Item item)
+    {
+        return IsConjured(item) ? 2 : 1;
+    }
+
+    private static void IncreaseQuality(Item item, int amount = 1)
+    {
+        item.Quality = Math.Min(50, item.Quality + amount);
+    }
+
+    private static void DecreaseQuality(Item item, int amount)
+    {
+        item.Quality = Math.Max(0, item.Quality - amount);
+    }
+
+    private static bool IsAgedBrie(Item item)
+    {
+        return item.Name == AgedBrie;
+    }
+
+    private static bool IsSulfuras(Item item)
+    {
+        return item.Name == Sulfuras;
+    }
+
+    private static bool IsBackstagePass(Item item)
+    {
+        return item.Name == BackstagePasses;
+    }
+
+    private static bool IsConjured(Item item)
+    {
+        return item.Name.StartsWith(
+            ConjuredPrefix,
+            StringComparison.OrdinalIgnoreCase);
     }
 }
 
